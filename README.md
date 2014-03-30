@@ -6,4 +6,4 @@ A console client for Trello, but mostly an excuse to try out [Golang](http://www
 Screenshot
 ==========
 
-![screenshot_1](https://raw.github.com/icecrime/clitrello/master/screenshot_1.png)
+![screenshot_1](https://raw.github.com/icecrime/clitrello/master/screenshots/screenshot_1.png)
