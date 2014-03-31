@@ -20,11 +20,11 @@ func NewBoardListScreen() *BoardListScreen {
 
 func (screen *BoardListScreen) Create(context *Context) {
 	httpResponse := make(chan []interface{}, 1)
-	screen.httpResponse = httpResponse
-
 	go func(resultChannel chan []interface{}) {
 		resultChannel <- Execute(context.config, ListBoardsAction())
 	}(httpResponse)
+
+	screen.httpResponse = httpResponse
 
 	screen.boardsWdw = createWindow(12, 25, 0, 0)
 	screen.boardsWdw.Box(0, 0)
@@ -32,6 +32,17 @@ func (screen *BoardListScreen) Create(context *Context) {
 	screen.boardsWdw.Refresh()
 	screen.boardsMenuWdw = screen.boardsWdw.Derived(10, 23, 1, 1)
 	screen.boardsMenuWdw.Keypad(true)
+}
+
+func (screen *BoardListScreen) Destroy() {
+	screen.done = true
+	screen.boardsMenu.UnPost()
+	for _, menuItem := range screen.boardsMenu.Items() {
+		menuItem.Free()
+	}
+	screen.boardsMenu.Free()
+	screen.boardsMenuWdw.Delete()
+	screen.boardsWdw.Delete()
 }
 
 func (screen *BoardListScreen) Update(context *Context) {
@@ -44,15 +55,6 @@ func (screen *BoardListScreen) Update(context *Context) {
 			screen.handleHttpResponse(context, response)
 		}
 	}
-}
-
-func (screen *BoardListScreen) Destroy() {
-	screen.done = true
-	screen.boardsMenu.UnPost()
-	for _, menuItem := range screen.boardsMenuItems {
-		menuItem.Free()
-	}
-	screen.boardsMenu.Free()
 }
 
 func (screen *BoardListScreen) handleKey(context *Context, key goncurses.Key) {
@@ -86,8 +88,8 @@ func (screen *BoardListScreen) handleHttpResponse(context *Context, response []i
 			menuData = append(menuData, MenuData{boardData["name"].(string), boardData["id"].(string)})
 		}
 
-		screen.boardsMenuItems = createMenuItems(menuData...)
-		screen.boardsMenu = createMenu(screen.boardsMenuItems)
+		boardsMenuItems := createMenuItems(menuData...)
+		screen.boardsMenu = createMenu(boardsMenuItems)
 		screen.boardsMenu.Format(10, 1)
 		screen.boardsMenu.Option(goncurses.O_SHOWDESC, false)
 		screen.boardsMenu.SetWindow(screen.boardsWdw)

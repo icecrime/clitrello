@@ -57,9 +57,7 @@ func main() {
 			config.Save(config.File)
 			fmt.Println("Configuration saved.")
 		}
-	case "list":
-		Execute(config, &ListBoards{})
-	case "visual":
+	case "index":
 		Visual(config)
 	default:
 		fmt.Print("invalid command '", cmd, "'\n")
