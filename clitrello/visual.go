@@ -6,11 +6,27 @@ import (
 	"code.google.com/p/goncurses"
 )
 
+type Application interface {
+	Config() *Config
+	Dispatch(Action)
+	SwitchState(Screen)
+	WindowSize() (height, width int)
+}
+
+type EventHandler interface {
+	HandleKey(goncurses.Key)
+	HandleHTTPResponse([]interface{})
+}
+
 type Screen interface {
-	Create(*Context)
-	Update(*Context)
+	EventHandler
+	Create()
 	Destroy()
 }
+
+/**
+ ******************************************************************************
+ */
 
 type Context struct {
 	activeScreen Screen
@@ -18,6 +34,23 @@ type Context struct {
 	mainWindow   *goncurses.Window
 	actChannel   chan<- func()
 	kbdChannel   <-chan goncurses.Key
+}
+
+// Retrieve the application configuration object.
+func (context *Context) Config() *Config {
+	return context.config
+}
+
+// Dispatches a function to be executed in ncurses goroutine.
+func (context *Context) Dispatch(action Action) {
+	go func(context *Context, screen Screen) {
+		response := Execute(context.config, action)
+		context.actChannel <- func() {
+			if screen == context.activeScreen {
+				screen.HandleHTTPResponse(response)
+			}
+		}
+	}(context, context.activeScreen)
 }
 
 func (context *Context) SwitchState(newState Screen) {
@@ -30,8 +63,11 @@ func (context *Context) SwitchState(newState Screen) {
 	context.mainWindow.Refresh()
 
 	context.activeScreen = newState
-	context.activeScreen.Create(context)
-	go context.activeScreen.Update(context)
+	context.activeScreen.Create()
+}
+
+func (context *Context) WindowSize() (int, int) {
+	return context.mainWindow.MaxYX()
 }
 
 /**
@@ -81,7 +117,7 @@ func eventLoop(config *Config, window *goncurses.Window) {
 	}(window, input)
 
 	// Create the initial Screen and start its update loop.
-	winContext.SwitchState(NewBoardListScreen())
+	winContext.SwitchState(NewBoardListScreen(winContext))
 
 	run := true
 	for run {
@@ -91,7 +127,7 @@ func eventLoop(config *Config, window *goncurses.Window) {
 			case 'q':
 				run = false
 			default: // forward the key to the active screen handler
-				kbdChannel <- key
+				winContext.activeScreen.HandleKey(key)
 			}
 		case fn := <-actChannel:
 			fn()
@@ -112,6 +148,14 @@ type MenuData struct {
 	desc string
 }
 
+func createMenu(items []*goncurses.MenuItem) (menu *goncurses.Menu) {
+	var err error
+	if menu, err = goncurses.NewMenu(items); err != nil {
+		panic(err)
+	}
+	return menu
+}
+
 func createMenuItem(name, desc string) (menuItem *goncurses.MenuItem) {
 	var err error
 	if menuItem, err = goncurses.NewItem(name, desc); err != nil {
@@ -126,14 +170,6 @@ func createMenuItems(items ...MenuData) []*goncurses.MenuItem {
 		menuItems[i] = createMenuItem(menuData.name, menuData.desc)
 	}
 	return menuItems
-}
-
-func createMenu(items []*goncurses.MenuItem) (menu *goncurses.Menu) {
-	var err error
-	if menu, err = goncurses.NewMenu(items); err != nil {
-		panic(err)
-	}
-	return menu
 }
 
 func createWindow(h, w, y, x int) (window *goncurses.Window) {

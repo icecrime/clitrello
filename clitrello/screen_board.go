@@ -5,30 +5,27 @@ import (
 )
 
 type BoardScreen struct {
-	done         bool
-	boardId      string
-	boardName    string
-	httpResponse <-chan []interface{}
-	titleWindow  *goncurses.Window
+	application Application
+	done        bool
+	ready       bool
+
+	boardId     string
+	boardName   string
+	titleWindow *goncurses.Window
 
 	activeList int
 	cardLists  []*CardList
 }
 
-func NewBoardScreen(boardId, boardName string) *BoardScreen {
-	return &BoardScreen{boardId: boardId, boardName: boardName}
+func NewBoardScreen(application Application, boardId, boardName string) *BoardScreen {
+	return &BoardScreen{application: application, boardId: boardId, boardName: boardName}
 }
 
-func (screen *BoardScreen) Create(context *Context) {
-	httpResponse := make(chan []interface{}, 1)
-	go func(resultChannel chan []interface{}, boardId string) {
-		resultChannel <- Execute(context.config, GetBoardCardsAction(boardId))
-	}(httpResponse, screen.boardId)
+func (screen *BoardScreen) Create() {
+	screen.application.Dispatch(NewGetBoardCardsAction(screen.boardId))
 
-	screen.httpResponse = httpResponse
-
-	_, x := context.mainWindow.MaxYX()
-	screen.titleWindow = createWindow(3, x, 0, 0)
+	_, width := screen.application.WindowSize()
+	screen.titleWindow = createWindow(3, width, 0, 0)
 	screen.titleWindow.Box(0, 0)
 	screen.titleWindow.MovePrint(1, 1, " "+screen.boardName+" ")
 	screen.titleWindow.Refresh()
@@ -39,61 +36,45 @@ func (screen *BoardScreen) Destroy() {
 	for _, cardList := range screen.cardLists {
 		cardList.Destroy()
 	}
+	screen.titleWindow.Delete()
 }
 
-func (screen *BoardScreen) Update(context *Context) {
-	var key goncurses.Key
-	for kbdChannelActive := true; kbdChannelActive && !screen.done; {
-		select {
-		case key, kbdChannelActive = <-context.kbdChannel:
-			screen.handleKey(context, key)
-		case response := <-screen.httpResponse:
-			screen.handleHttpResponse(context, response)
-		}
+func (screen *BoardScreen) HandleKey(key goncurses.Key) {
+	if screen.done || !screen.ready {
+		return
 	}
-}
 
-func (screen *BoardScreen) handleKey(context *Context, key goncurses.Key) {
 	switch key {
 	case goncurses.KEY_LEFT:
-		context.actChannel <- func() {
-			screen.switchActiveList(screen.activeList - 1)
-		}
+		screen.switchActiveList(screen.activeList - 1)
 	case goncurses.KEY_RIGHT:
-		context.actChannel <- func() {
-			screen.switchActiveList(screen.activeList + 1)
-		}
+		screen.switchActiveList(screen.activeList + 1)
 	case goncurses.KEY_DOWN:
-		context.actChannel <- func() {
-			screen.cardLists[screen.activeList].Driver(goncurses.REQ_DOWN)
-		}
+		screen.cardLists[screen.activeList].Driver(goncurses.REQ_DOWN)
 	case goncurses.KEY_UP:
-		context.actChannel <- func() {
-			screen.cardLists[screen.activeList].Driver(goncurses.REQ_UP)
-		}
+		screen.cardLists[screen.activeList].Driver(goncurses.REQ_UP)
 	case goncurses.KEY_RETURN:
-		context.actChannel <- func() {
-			screen.cardLists[screen.activeList].ViewCard()
-		}
+		screen.cardLists[screen.activeList].ViewCard()
 	case '<':
 		screen.done = true
-		context.actChannel <- func() {
-			context.SwitchState(NewBoardListScreen())
-		}
+		screen.application.SwitchState(NewBoardListScreen(screen.application))
 	}
 }
 
-func (screen *BoardScreen) handleHttpResponse(context *Context, response []interface{}) {
+func (screen *BoardScreen) HandleHTTPResponse(response []interface{}) {
 	var startX int
 	for _, cardList := range response {
 		cardData := cardList.(map[string]interface{})
-		cardList := NewCardList(context, cardData, 4, startX)
+		cardList := NewCardList(screen.application, cardData, 4, startX)
 		screen.cardLists = append(screen.cardLists, cardList)
 		startX += LIST_WIDTH + 2
 	}
 
 	// Give focus to the first list
 	screen.switchActiveList(0)
+
+	// Mark the screen as ready
+	screen.ready = true
 }
 
 func (screen *BoardScreen) switchActiveList(activeIndex int) {
@@ -123,7 +104,7 @@ type CardList struct {
 	cardsData  map[string]CardInfo
 }
 
-func NewCardList(context *Context, listData map[string]interface{}, y, x int) *CardList {
+func NewCardList(application Application, listData map[string]interface{}, y, x int) *CardList {
 	// Extracts the cards elements from the returned JSON object.
 	cardsInfo := listData["cards"].([]interface{})
 	menuItems := make([]MenuData, 0, len(cardsInfo))

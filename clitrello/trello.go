@@ -33,7 +33,7 @@ func Execute(config *Config, action Action) (result []interface{}) {
 
 type ListBoards struct{}
 
-func ListBoardsAction() *ListBoards {
+func NewListBoardsAction() *ListBoards {
 	return &ListBoards{}
 }
 
@@ -53,7 +53,7 @@ type GetBoardCards struct {
 	boardId string
 }
 
-func GetBoardCardsAction(boardId string) *GetBoardCards {
+func NewGetBoardCardsAction(boardId string) *GetBoardCards {
 	return &GetBoardCards{boardId}
 }
 
