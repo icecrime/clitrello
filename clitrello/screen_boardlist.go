@@ -1,7 +1,11 @@
 package main
 
 import (
-	"code.google.com/p/goncurses"
+	"github.com/gbin/goncurses"
+)
+
+const (
+	BOARD_LIST_WIDTH = 50
 )
 
 type BoardListScreen struct {
@@ -22,12 +26,10 @@ func NewBoardListScreen(application Application) *BoardListScreen {
 func (screen *BoardListScreen) Create() {
 	screen.application.Dispatch(NewListBoardsAction())
 
-	screen.boardsWdw = createWindow(12, 25, 0, 0)
+	screen.boardsWdw = createWindow(2, BOARD_LIST_WIDTH, 0, 0)
 	screen.boardsWdw.Box(0, 0)
-	screen.boardsWdw.MovePrint(0, 1, " My Boards ")
+	screen.boardsWdw.MovePrint(0, 2, " My Boards ")
 	screen.boardsWdw.Refresh()
-	screen.boardsMenuWdw = screen.boardsWdw.Derived(10, 23, 1, 1)
-	screen.boardsMenuWdw.Keypad(true)
 }
 
 func (screen *BoardListScreen) Destroy() {
@@ -61,20 +63,32 @@ func (screen *BoardListScreen) HandleKey(key goncurses.Key) {
 	}
 }
 
-func (screen *BoardListScreen) HandleHTTPResponse(response []interface{}) {
-	menuData := make([]MenuData, 0, len(response))
-	for _, userBoard := range response {
-		boardData := userBoard.(map[string]interface{})
-		menuData = append(menuData, MenuData{boardData["name"].(string), boardData["id"].(string)})
+func (screen *BoardListScreen) HandleHTTPResponse(response interface{}) {
+	boardList := response.([]*BoardInfo)
+	menuData := make([]MenuData, len(boardList))
+	for i, userBoard := range boardList {
+		menuData[i] = MenuData{userBoard.Name, userBoard.Id}
 	}
 
-	boardsMenuItems := createMenuItems(menuData...)
-	screen.boardsMenu = createMenu(boardsMenuItems)
-	screen.boardsMenu.Format(10, 1)
+	windowHeight := len(menuData) + 2
+	if height, _ := screen.application.WindowSize(); windowHeight > height {
+		windowHeight = height
+	}
+
+	screen.boardsWdw.Clear()
+	screen.boardsWdw.Resize(windowHeight, BOARD_LIST_WIDTH)
+	screen.boardsWdw.Box(0, 0)
+	screen.boardsWdw.MovePrint(0, 2, " My Boards ")
+
+	screen.boardsMenuWdw = screen.boardsWdw.Derived(windowHeight-2, BOARD_LIST_WIDTH-2, 1, 1)
+	screen.boardsMenu = createMenu(createMenuItems(menuData...))
+	screen.boardsMenu.Format(windowHeight-2, 1)
 	screen.boardsMenu.Option(goncurses.O_SHOWDESC, false)
 	screen.boardsMenu.SetWindow(screen.boardsWdw)
 	screen.boardsMenu.SubWindow(screen.boardsMenuWdw)
 	screen.boardsMenu.Post()
+
+	screen.boardsWdw.Refresh()
 	screen.boardsMenuWdw.Refresh()
 
 	screen.ready = true

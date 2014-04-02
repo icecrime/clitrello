@@ -23,11 +23,9 @@ func BuildURL(url string, params map[string]string) string {
 	return resultUrl
 }
 
-func GetJSONContent(response *http.Response) []interface{} {
-	var jsonData interface{}
+func GetJSONContent(response *http.Response, out interface{}) {
 	jsonDecoder := json.NewDecoder(response.Body)
-	jsonDecoder.Decode(&jsonData)
-	return jsonData.([]interface{})
+	jsonDecoder.Decode(out)
 }
 
 func TrelloURL(config *Config, path string, params map[string]string) string {

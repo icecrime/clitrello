@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"code.google.com/p/goncurses"
+	"github.com/gbin/goncurses"
 )
 
 type Application interface {
@@ -15,7 +15,7 @@ type Application interface {
 
 type EventHandler interface {
 	HandleKey(goncurses.Key)
-	HandleHTTPResponse([]interface{})
+	HandleHTTPResponse(interface{})
 }
 
 type Screen interface {
@@ -170,6 +170,14 @@ func createMenuItems(items ...MenuData) []*goncurses.MenuItem {
 		menuItems[i] = createMenuItem(menuData.name, menuData.desc)
 	}
 	return menuItems
+}
+
+func createPad(h, w int) (pad *goncurses.Pad) {
+	var err error
+	if pad, err = goncurses.NewPad(h, w); err != nil {
+		panic(err)
+	}
+	return pad
 }
 
 func createWindow(h, w, y, x int) (window *goncurses.Window) {

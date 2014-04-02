@@ -7,10 +7,10 @@ import (
 
 type Action interface {
 	BuildURL(*Config) string
-	HandleResponse(*http.Response) []interface{}
+	HandleResponse(*http.Response) interface{}
 }
 
-func Execute(config *Config, action Action) (result []interface{}) {
+func Execute(config *Config, action Action) (result interface{}) {
 	endpoint := action.BuildURL(config)
 
 	resp, err := http.Get(endpoint)
@@ -33,6 +33,11 @@ func Execute(config *Config, action Action) (result []interface{}) {
 
 type ListBoards struct{}
 
+type BoardInfo struct {
+	Id   string
+	Name string
+}
+
 func NewListBoardsAction() *ListBoards {
 	return &ListBoards{}
 }
@@ -41,8 +46,10 @@ func (*ListBoards) BuildURL(config *Config) string {
 	return TrelloURL(config, "members/me/boards", nil)
 }
 
-func (*ListBoards) HandleResponse(response *http.Response) []interface{} {
-	return GetJSONContent(response)
+func (*ListBoards) HandleResponse(response *http.Response) interface{} {
+	var result []*BoardInfo
+	GetJSONContent(response, &result)
+	return result
 }
 
 /**
@@ -51,6 +58,21 @@ func (*ListBoards) HandleResponse(response *http.Response) []interface{} {
 
 type GetBoardCards struct {
 	boardId string
+}
+
+type TrelloCard struct {
+	Id       string
+	Closed   bool
+	Desc     string
+	DescData string
+	Name     string
+	Url      string
+}
+
+type TrelloList struct {
+	Id    string
+	Name  string
+	Cards []*TrelloCard
 }
 
 func NewGetBoardCardsAction(boardId string) *GetBoardCards {
@@ -63,8 +85,10 @@ func (action *GetBoardCards) BuildURL(config *Config) string {
 	return TrelloURL(config, path, params)
 }
 
-func (*GetBoardCards) HandleResponse(response *http.Response) []interface{} {
-	return GetJSONContent(response)
+func (*GetBoardCards) HandleResponse(response *http.Response) interface{} {
+	var result []*TrelloList
+	GetJSONContent(response, &result)
+	return result
 }
 
 /**
